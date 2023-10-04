@@ -1,1 +1,7 @@
 *.map
+tsconfig.json
+main_.ts
+main_.js
+main.js.txt
+language.ts
+language.js
