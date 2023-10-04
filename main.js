@@ -122,10 +122,10 @@ class GameObject extends AccordObject {
      * Returns the first component of specified type
      * @template {Component} T 
      * @param {T} type Component type
-     * @returns {T}
+     * @returns {T | void}
      */
     getComponent(type) {
-        return this.getComponent()
+        return this.getComponents().next().value;
     }
 
     /**
