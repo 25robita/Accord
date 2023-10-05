@@ -174,6 +174,25 @@ export class Vector2 {
     }
 
     /**
+     * Calculates the dot/inner product of two vectors
+     * @param {Vec2Arg} a
+     * @param {Vec2Arg} b
+     * @returns {number}
+     */
+    static dot() {
+        return a[0] * b[0] + a[1] * b[1];
+    }
+
+    /**
+     * Calculates the dot/inner product of this and another vector
+     * @param {Vec2Arg} other 
+     * @returns {number}
+     */
+    dot(other) {
+        return Vector2.dot(this, other);
+    }
+
+    /**
      * @param {Vec2Arg} a 
      * @param {Vec2Arg | number} b 
      * @returns {Vector2}
