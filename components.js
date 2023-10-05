@@ -36,9 +36,18 @@ export class PhysicsComponent extends Component {
     /** @type {Vector2} */
     acceleration = new Vector2();
 
+    /** @type {number} */
+    mass = 1;
+
+    constructor(object, mass) {
+        super(object);
+        this.mass = mass;
+    }
+
     start() {
         this.acceleration = new Vector2(0, 100);
         this.velocity = new Vector2();
+        this.mass = 1;
     }
 
     update() {
