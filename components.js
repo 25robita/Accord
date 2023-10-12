@@ -1,5 +1,7 @@
-import { AccordObject } from './base';
-import { Vector2 } from './utilities';
+import { AccordObject } from './base.js';
+import { GameObject } from './gameobject.js';
+import { ObjectReference, Time } from './main.js';
+import { Vector2 } from './utilities.js';
 
 export class Component extends AccordObject {
     /** @type {boolean} */
@@ -34,26 +36,44 @@ export class PhysicsComponent extends Component {
     velocity = new Vector2();
 
     /** @type {Vector2} */
+    #earlyVelocity = new Vector2();
+
+    /** @type {Vector2} */
+    get earlyVelocity() {
+        return this.#earlyVelocity;
+    }
+
+    /** @type {Vector2} */
     acceleration = new Vector2();
 
     /** @type {number} */
     mass = 1;
 
+    /**
+     * 
+     * @param {GameObject} object 
+     * @param {number} [mass] 
+     */
     constructor(object, mass) {
         super(object);
-        this.mass = mass;
+        this.mass = mass ?? 1;
+    }
+
+    /** @type  */
+    addForce(force) {
+
     }
 
     start() {
-        this.acceleration = new Vector2(0, 100);
-        this.velocity = new Vector2();
-        this.mass = 1;
+        // this.acceleration = new Vector2(0, 0);
+        // this.velocity = new Vector2(0, 0);
+        // this.mass = 1;
     }
 
     update() {
+        // console.log(this.velocity);
         this.velocity.add(this.acceleration.product(Time.deltaTime))
-        // this.velocity[0] += this.acceleration[0] * Time.deltaTime;
-        // this.velocity[1] += this.acceleration[1] * Time.deltaTime;
+        this.#earlyVelocity.copyFrom(this.velocity);
 
         this.gameObject.position.add(this.velocity.product(Time.deltaTime));
 
@@ -73,12 +93,84 @@ export class Collider extends Component {
      */
     checkCollision(other) { }
 
+    /**
+     * @param {Collider} other
+     * @returns {Vector2}
+     */
+    collisionPoint(other) { }
+
     lateUpdate() {
-        for (let other of ObjectReference.getOfType(Collider)) {
+        /** @template {Collider} anycollider */
+        /** @type {Generator<anycollider, void, never>} */
+        const allColliders = ObjectReference.getOfType(Collider);
+        for (let other of allColliders) {
             if (this.uuid == other.uuid) continue;
             if (this.checkCollision(other)) {
-                // console.log(`${this.gameObject.name} collides with ${other.gameObject.name}`)
-                this.gameObject.undoMovement();
+                /** @type {PhysicsComponent | null} */
+                let thisPhysics;
+                /** @type {PhysicsComponent | null} */
+                const otherPhysics = other.gameObject.getComponent(PhysicsComponent);
+
+                if (!(thisPhysics = this.gameObject.getComponent(PhysicsComponent)))
+                    return this.gameObject.undoMovement();
+
+                const otherMass = otherPhysics?.mass ?? Infinity; // this causes issues; it makes sense as to why, but still interesting.
+                const otherVelocity = otherPhysics?.earlyVelocity ?? new Vector2();
+
+                const thisMass = thisPhysics.mass;
+                const thisVelocity = thisPhysics.velocity;
+
+                /** @type {Vector2} */
+                let thisCenter = new Vector2();
+
+                if (this instanceof CircleCollider) {
+                    thisCenter.copyFrom(this.Position);
+                } else if (this instanceof BoxCollider) {
+                    thisCenter.copyFrom(this.Center);
+                }
+
+
+                let thisRadius;
+
+                if (this instanceof CircleCollider) {
+                    thisRadius = this.radius;
+                } else if (this instanceof BoxCollider) {
+                    thisRadius = this.collisionPoint(other).distanceTo(this.Center);
+                }
+
+                /** @type {Vector2} */
+                let otherCenter = new Vector2();
+
+                if (other instanceof CircleCollider) {
+                    otherCenter.copyFrom(
+                        thisCenter.sum(other.Position.difference(thisCenter).normalised().product(2 * thisRadius))
+                    );
+                } else if (other instanceof BoxCollider) {
+                    otherCenter.copyFrom(
+                        thisCenter.sum(this.collisionPoint(other).difference(thisCenter).product(2))
+                    );
+                }
+
+                [thisMass, thisVelocity, thisCenter]
+
+                const centerDifference = thisCenter.difference(otherCenter);
+
+                /**
+                 * Based on – maths-wise and whatnot
+                 * https://en.wikipedia.org/wiki/Elastic_collision#Two-dimensional_collision_with_two_moving_objects
+                 * Date: 12/10/23
+                 */
+
+                let newVel = thisVelocity.difference(
+                    centerDifference.product(
+                        (2 * otherMass / (thisMass + otherMass))
+                        * thisVelocity.difference(otherVelocity).dot(centerDifference)
+                        / (centerDifference.dot(centerDifference))
+                    )
+                );
+
+                thisPhysics.velocity = newVel;
+
                 break;
             }
         }
@@ -141,14 +233,53 @@ export class BoxCollider extends Collider {
     /** @type {Vector2} */
     get Center() {
         return new Vector2(
-            (this.Left + this.Right) / 2,
-            (this.Top + this.Bottom) / 2
+            this.CenterX,
+            this.CenterY
         );
+    }
+
+    /** @type {number} */
+    get CenterX() {
+        return (this.Left + this.Right) / 2;
+    }
+    /** @type {number} */
+    get CenterY() {
+        return (this.Top + this.Bottom) / 2
     }
 
     /** @type {Vector2} */
     get TopLeft() {
         return this.topLeft.sum(this.gameObject.position);
+    }
+
+    /** @type {Vector2} */
+    get TopMiddle() {
+        return new Vector2(this.CenterX, this.Top);
+    }
+
+    /** @type {Vector2} */
+    get TopRight() {
+        return new Vector2(this.Right, this.Top);
+    }
+
+    /** @type {Vector2} */
+    get MiddleLeft() {
+        return new Vector2(this.Left, this.CenterY);
+    }
+
+    /** @type {Vector2} */
+    get MiddleRight() {
+        return new Vector2(this.Right, this.CenterY);
+    }
+
+    /** @type {Vector2} */
+    get BottomLeft() {
+        return new Vector2(this.Left, this.Bottom);
+    }
+
+    /** @type {Vector2} */
+    get BottomMiddle() {
+        return new Vector2(this.CenterX, this.Bottom);
     }
 
     /** @type {Vector2} */
@@ -169,6 +300,74 @@ export class BoxCollider extends Collider {
 
         return other.checkCollision(this); // this shouldn't really be called but oh well
 
+    }
+
+    /**
+     * @param {Collider} other 
+     * @returns {Vector2}
+     */
+    collisionPoint(other) {
+        if (other instanceof BoxCollider) {
+            const otherCenter = other.Center;
+
+            const distanceToTopLeft = otherCenter.distanceTo(this.TopLeft),
+                distanceToBottomRight = otherCenter.distanceTo(this.BottomRight);
+
+            if (distanceToTopLeft < distanceToBottomRight) {
+                const distanceToTopRight = otherCenter.distanceTo(this.TopRight);
+                if (distanceToTopRight < distanceToTopLeft) {
+                    const distanceToTopMiddle = otherCenter.distanceTo(this.TopMiddle);
+                    if (distanceToTopMiddle < distanceToTopRight)
+                        return this.TopMiddle;
+                    return this.TopRight;
+                }
+
+                const distanceToMiddleLeft = otherCenter.distanceTo(this.MiddleLeft);
+
+                if (distanceToMiddleLeft < distanceToTopLeft) {
+                    const distanceToBottomLeft = otherCenter.distanceTo(this.BottomLeft);
+                    if (distanceToBottomLeft < distanceToMiddleLeft)
+                        return this.BottomLeft;
+                    return this.MiddleLeft;
+                }
+
+                const distanceToTopMiddle = otherCenter.distanceTo(this.TopMiddle);
+
+                if (distanceToTopMiddle < distanceToTopLeft)
+                    return this.TopMiddle;
+                return this.topLeft;
+
+            } else {
+                const distanceToBottomLeft = otherCenter.distanceTo(this.BottomLeft);
+                if (distanceToBottomLeft < distanceToBottomRight) {
+                    // bottomleft, bottommiddle
+
+                    const distanceToBottomMiddle = otherCenter.distanceTo(this.BottomMiddle);
+
+                    if (distanceToBottomMiddle < distanceToBottomLeft)
+                        return this.BottomMiddle;
+                    return this.BottomLeft;
+                }
+
+                const distanceToMiddleRight = otherCenter.distanceTo(this.MiddleRight);
+
+                if (distanceToMiddleRight < distanceToBottomRight) {
+                    const distanceToTopRight = otherCenter.distanceTo(this.TopRight);
+
+                    if (distanceToTopRight < distanceToMiddleRight)
+                        return this.TopRight;
+                    return this.MiddleRight;
+                }
+
+                const distanceToBottomMiddle = otherCenter.distanceTo(this.BottomMiddle);
+
+                if (distanceToBottomMiddle < distanceToBottomRight)
+                    return this.BottomMiddle;
+                return this.BottomRight;
+            }
+        }
+
+        return other.collisionPoint(this);
     }
 }
 
@@ -201,9 +400,7 @@ export class CircleCollider extends Collider {
     checkCollision(other) {
         if (other instanceof CircleCollider) {
             return this.Position.distanceTo(other.Position) < this.radius + other.radius;
-        }
-
-        if (other instanceof BoxCollider) {
+        } else if (other instanceof BoxCollider) {
             /**
              * Copied
              * https://stackoverflow.com/questions/401847/circle-rectangle-collision-detection-intersection
@@ -221,4 +418,200 @@ export class CircleCollider extends Collider {
             return this.Position.distanceTo(other.Center) <= this.radius
         }
     }
+
+    /** 
+    * @param {Collider} other 
+    * @returns {Vector2}
+    */
+    collisionPoint(other) {
+        if (other instanceof CircleCollider) {
+            return this.Position.sum(other.Position.difference(this.Position).normalised().product(this.radius))
+        } else if (other instanceof BoxCollider) {
+            // TODO: this should probably find a point *between* the two surfaces; 
+            // currently it finds a point on the circle which is leading to collision
+            // issues. problematically, this should probably make the calculations far more difficult.
+            // i might just be able to get an intercept point from the difference line at x = whatever
+            // and then take the average. anyway im tired
+
+            // on second thought, this code is entirely f***ed (i will censor it as it is a school project)
+            // and i need to rethink it on a fundamental level. that being said, the method above 
+            // oh wait nevermind there is no difference line. I might have to look through the circle x box
+            // collision code to establish the collision point. fun.
+
+            return other.Center.difference(this.Position).normalised().product(this.radius).sum(this.Position)
+        }
+    }
+}
+
+export class Renderer extends Component {
+    /**
+     * @param {CanvasRenderingContext2D} surface 
+     */
+    render(surface) { }
+}
+
+export class CircleRenderer extends Renderer {
+    /** @type {number} */
+    radius = 0;
+
+    /** @type {string} */
+    color = "black";
+
+    /**
+     * 
+     * @param {GameObject} gameObject parent
+     * @param {number} [radius] Radius of the rendered circle
+     */
+    constructor(object, radius) {
+        super(object);
+        this.radius = radius ?? 0;
+    }
+
+    /**
+     * @param {CanvasRenderingContext2D} surface 
+     */
+    render(surface) {
+        if (!this.radius) return;
+
+        surface.fillStyle = this.color;
+        surface.ellipse(...this.gameObject.position, this.radius, this.radius, 0, 0, 180);
+        surface.fill();
+    }
+}
+
+
+export class PolygonRenderer extends Renderer {
+    /** @type {Vector2[]} */
+    points = [];
+
+    /** @type {string} */
+    color = "black";
+
+    /** 
+     * @param {CanvasRenderingContext2D} surface 
+     */
+    render(surface) {
+        surface.fillStyle = this.color;
+        surface.beginPath();
+        surface.moveTo(...(this.points[0].sum(this.gameObject.position)));
+        for (let point of this.points.slice(1)) {
+            surface.lineTo(...(point.sum(this.gameObject.position)));
+        }
+        surface.closePath();
+        surface.fill();
+    }
+}
+
+export class BoxRenderer extends PolygonRenderer {
+    /** @type {number} */
+    #top = 0;
+    /** @type {number} */
+    #bottom = 0;
+    /** @type {number} */
+    #left = 0;
+    /** @type {number} */
+    #right = 0;
+
+
+    /**
+     * Wrapper for PolygonRenderer making it easier to render boxes
+     * @param {GameObject} object
+     * @param {[number, number, number, number]} [rect] top, bottom, left, right of initial rect.
+     */
+    constructor(object, rect) {
+        super(object);
+
+        /** @type {BoxCollider} */
+        let thisBox;
+
+        if (rect) {
+            [this.#top, this.#bottom, this.#left, this.#right] = rect;
+        } else if (thisBox = this.gameObject.getComponent(BoxCollider)) {
+            [this.#top, this.#bottom, this.#left, this.#right] = [thisBox.topLeft.y, thisBox.bottomRight.y, thisBox.topLeft.x, thisBox.bottomRight.x];
+        }
+        this.points = [
+            new Vector2(),
+            new Vector2(),
+            new Vector2(),
+            new Vector2()
+        ]
+
+        this.#updatePoints();
+    }
+
+    #updatePoints() {
+        this.points[0].copyFrom([this.#left, this.#top]);
+        this.points[1].copyFrom([this.#right, this.#top]);
+        this.points[2].copyFrom([this.#right, this.#bottom]);
+        this.points[3].copyFrom([this.#left, this.#bottom]);
+    }
+
+    /** 
+     * The local Top value of the box
+     * @type {number} 
+     */
+    set Top(value) {
+        this.#top = value;
+        this.#updatePoints();
+    }
+
+    /** 
+     * The local Top value of the box
+     * @type {number} 
+     */
+    get Top() {
+        return this.#top;
+    }
+
+    /** 
+     * The local Bottom value of the box
+     * @type {number} 
+     */
+    set Bottom(value) {
+        this.#bottom = value;
+        this.#updatePoints();
+    }
+
+    /** 
+     * The local Bottom value of the box
+     * @type {number} 
+     */
+    get Bottom() {
+        return this.#bottom;
+    }
+
+    /** 
+     * The local left value of the box
+     * @type {number} 
+     */
+    set Left(value) {
+        this.#left = value;
+        this.#updatePoints();
+    }
+
+    /** 
+     * The local left value of the box
+     * @type {number} 
+     */
+    get Left() {
+        return this.#left;
+    }
+
+    /** 
+     * The local Right value of the box
+     * @type {number} 
+     */
+    set Right(value) {
+        this.#right = value;
+        this.#updatePoints();
+    }
+
+    /** 
+     * The local Right value of the box
+     * @type {number} 
+     */
+    get Right() {
+        return this.#right;
+    }
+
 }

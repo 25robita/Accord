@@ -1,4 +1,6 @@
-import { generateUUID } from './utilities';
+import { ObjectReference } from './main.js';
+import { generateUUID } from './utilities.js';
+
 export class AccordObject {  // going to be serializable
     /** @type {string} */
     uuid;

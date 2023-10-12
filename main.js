@@ -1,13 +1,13 @@
-import { AccordObject } from "./base";
-import { TimeManager, Vector2 } from "./utilities";
-
-import { BoxCollider, CircleCollider, Component, PhysicsComponent } from "./components";
+import { AccordObject } from "./base.js";
+import { BoxCollider, BoxRenderer, CircleCollider, CircleRenderer, PhysicsComponent } from "./components.js";
+import { GameObject } from "./gameobject.js";
+import { TimeManager } from "./utilities.js";
 
 /** 
- * @template T
+ * @template {AccordObject} T
  * @type {Map<string, AccordObject> & {getOfType: (type: T) => Generator<T, void, never>}} 
  * */
-const ObjectReference = new Map();
+export const ObjectReference = new Map();
 
 ObjectReference.getOfType = function* (type) {
     for (let [uuid, object] of this) {
@@ -15,130 +15,10 @@ ObjectReference.getOfType = function* (type) {
     }
 }
 
+window.x = ObjectReference;
 
 /****** Accord Objects *******/
 
-class GameObject extends AccordObject {
-    /** @type {Vector2} */
-    position;
-    /** @type {Vector2} */
-    #previousPosition;
-    /** @type {number} */
-    radius;
-    /** @type {GameObject[]} */
-    children;
-    /** @type {Component[]} */
-    components;
-    /** @type {string} */
-    name;
-
-    /**
-     * 
-     * @param {Vec2Arg} position Starting position of the GameObject
-     * @param {number} radius Radius of rendered circle
-     */
-    constructor(position, radius) {
-        super();
-        this.position = new Vector2(position ?? [0, 0]);
-        this.#previousPosition = this.position.copy();
-
-        this.radius = radius ?? 100;
-        this.children = [];
-        this.components = []
-    }
-
-    /** @type {Vector2} */
-    get PreviousPosition() {
-        return this.#previousPosition;
-    }
-
-    /**
-     * 
-     * @param {CanvasRenderingContext2D} surface 
-     */
-    render(surface) {
-        if (this.radius) {
-            surface.fillStyle = "blue";
-            surface.ellipse(this.position.x, this.position.y, this.radius, this.radius, 0, 0, 180);
-            surface.fill();
-        }
-
-        this.children.forEach(i => i.render(surface));
-    }
-
-    /**
-     * @param {GameObject} gameObject 
-     */
-    addChild(gameObject) {
-        this.children.push(gameObject);
-    }
-
-    /**
-     * Must be called in lateUpdate. Undoes any movement done this frame.
-     */
-    undoMovement() {
-        this.position.copyFrom(this.#previousPosition);
-    }
-
-    update() {
-        this.components.forEach(component => {
-            if (!component.enabled) return;
-
-            if (!component.started) {
-                component.started = true;
-                component.start()
-            }
-            component.update();
-        });
-
-        this.children.forEach(child => {
-            child.update();
-        });
-    }
-
-    lateUpdate() {
-        this.components.forEach(component => {
-            component.lateUpdate();
-        });
-
-        this.children.forEach(child => {
-            child.lateUpdate();
-        });
-
-        // console.log([this.position[0] - this.#previousPosition[0], this.position[1] - this.#previousPosition[1]]);
-
-        this.#previousPosition.copyFrom(this.position);
-    }
-
-    /**
-     * 
-     * @param {Component} component 
-     */
-    attachComponent(component) {
-        this.components.push(component);
-    }
-
-    /**
-     * Returns the first component of specified type
-     * @template {Component} T 
-     * @param {T} type Component type
-     * @returns {T | void}
-     */
-    getComponent(type) {
-        return this.getComponents().next().value;
-    }
-
-    /**
-     * Yields all components of specified type
-     * @template {Component} T 
-     * @param {T} type Component type
-     * @returns {Generator<T, void, never>}
-     */
-    *getComponents(type) {
-        for (let component of this.components)
-            if (component instanceof type) yield component;
-    }
-}
 
 class Scene extends AccordObject {
     /** @type {CanvasRenderingContext2D} */
@@ -176,28 +56,32 @@ class Scene extends AccordObject {
     }
 }
 
-const Time = new TimeManager();
+export const Time = new TimeManager();
 
 const main = new Scene();
 
-const object = new GameObject([300, 0], 100);
+const object = new GameObject([200, 300], 100);
 object.name = "Ball";
-new PhysicsComponent(object);
-new CircleCollider(object);
+const object1Physics = new PhysicsComponent(object, 2);
+object1Physics.velocity.copyFrom([100, 0]);
+new BoxCollider(object);
+new BoxRenderer(object).color = "blue";
+(new CircleRenderer(object, 10)).color = "black";
 
 main.root.addChild(object);
 
-const object2 = new GameObject([400, -200], 30);
+const object2 = new GameObject([400, 340], 30);
 object2.name = "Ball 2";
-new PhysicsComponent(object2);
+(new PhysicsComponent(object2)).velocity.copyFrom([-100, 0]);
+(new CircleRenderer(object2, 30)).color = "red";
 new CircleCollider(object2);
 
 main.root.addChild(object2);
 
 const colliderObject = new GameObject([0, 0], 0);
 colliderObject.name = "Floor";
-new BoxCollider(colliderObject, 300, 600, 0, 1000);
-
+new BoxCollider(colliderObject, 600, 800, 0, 1000);
+new BoxRenderer(colliderObject).color = "saddlebrown";
 main.root.addChild(colliderObject);
 
 

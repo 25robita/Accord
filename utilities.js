@@ -63,6 +63,9 @@ export class Vector2 {
         throw TypeError("Invalid format for Vector2 initialisation")
     }
 
+    static Zero = new Vector2();
+    static One = new Vector2(1, 1);
+
     /** @type {number} */
     get 0() {
         return this.x;
@@ -79,6 +82,15 @@ export class Vector2 {
 
     set 1(value) {
         this.y = value;
+    }
+
+    toString() {
+        return `(${this.x}, ${this.y})`
+    }
+
+    *[Symbol.iterator]() {
+        yield this.x;
+        yield this.y;
     }
 
     /**
@@ -101,15 +113,45 @@ export class Vector2 {
         return Vector2.distance(this, other);
     }
 
+    /**
+     * 
+     * @param {Vec2Arg} a 
+     * @returns {Vector2}
+     */
+    static normalised(a) {
+        return Vector2.quotient(a, Math.sqrt(a[0] ** 2 + a[1] ** 2));
+    }
+
+    /**
+     * Normalises this vector in place
+     */
+    normalise() {
+        this.divide(Math.sqrt(this.x ** 2 + this.y ** 2));
+    }
+
+    /**
+     * Returns a normalised vector of this
+     * @returns {Vector2}
+     */
+    normalised() {
+        return Vector2.normalised(this);
+    }
+
 
 
     /**
-     * Returns the sum of two Vector2
+     * Returns the sum of two Vector2 or a Vector2 and a number
      * @param {Vec2Arg} a 
-     * @param {Vec2Arg} b 
+     * @param {Vec2Arg | number} b 
      * @returns {Vector2}
      */
     static sum(a, b) {
+        if (typeof b == "number")
+            return new Vector2(
+                a[0] + b,
+                a[1] + b
+            );
+
         return new Vector2(
             a[0] + b[0],
             a[1] + b[1]
@@ -117,7 +159,7 @@ export class Vector2 {
     }
 
     /**
-     * @param {Vec2Arg} other 
+     * @param {Vec2Arg | number} other 
      * @returns {Vector2}
      */
     sum(other) {
@@ -127,10 +169,16 @@ export class Vector2 {
 
     /**
      * @param {Vec2Arg} a 
-     * @param {Vec2Arg} b 
+     * @param {Vec2Arg | number} b 
      * @returns {Vector2}
      */
     static difference(a, b) {
+        if (typeof b == "number")
+            return new Vector2(
+                a[0] - b,
+                a[1] - b
+            );
+
         return new Vector2(
             a[0] - b[0],
             a[1] - b[1]
@@ -138,7 +186,7 @@ export class Vector2 {
     }
 
     /**
-     * @param {Vec2Arg} other 
+     * @param {Vec2Arg | number} other 
      * @returns {Vector2}
      */
     difference(other) {
@@ -179,7 +227,7 @@ export class Vector2 {
      * @param {Vec2Arg} b
      * @returns {number}
      */
-    static dot() {
+    static dot(a, b) {
         return a[0] * b[0] + a[1] * b[1];
     }
 
