@@ -496,21 +496,35 @@ export class PolygonRenderer extends Renderer {
     /** @type {Vector2[]} */
     points = [];
 
-    /** @type {string} */
+    /** @type {string} – The fill colour and default edge colour */
     color = "black";
+
+    /** @type {string | undefined} Defaults to PolygonRenderer.prototype.color*/
+    edgeColor;
+
+    /** @type {boolean} Draws edges – defaults to false */
+    edge = false;
+    /** @type {boolean} Draws fill – defaults to true */
+    fill = true;
+
+    /** @type {number} */
+    lineWidth = 4;
 
     /** 
      * @param {CanvasRenderingContext2D} surface 
      */
     render(surface) {
         surface.fillStyle = this.color;
+        surface.strokeStyle = this.edgeColor ?? this.color;
+        surface.lineWidth = this.lineWidth;
         surface.beginPath();
         surface.moveTo(...(this.points[0].sum(this.gameObject.position)));
         for (let point of this.points.slice(1)) {
             surface.lineTo(...(point.sum(this.gameObject.position)));
         }
         surface.closePath();
-        surface.fill();
+        if (this.fill) surface.fill();
+        if (this.edge) surface.stroke();
     }
 }
 
@@ -529,9 +543,13 @@ export class BoxRenderer extends PolygonRenderer {
      * Wrapper for PolygonRenderer making it easier to render boxes
      * @param {GameObject} object
      * @param {[number, number, number, number]} [rect] top, bottom, left, right of initial rect.
+     * @param {boolean} [edge] Enables/disables edge drawing. Defaults to false
+     * @param {boolean} [fill] Enables/disables fill drawing. Defaults to true
      */
-    constructor(object, rect) {
+    constructor(object, rect, edge = false, fill = true) {
         super(object);
+        this.edge = edge;
+        this.fill = fill;
 
         /** @type {BoxCollider} */
         let thisBox;

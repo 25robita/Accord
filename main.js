@@ -77,7 +77,7 @@ export const main = new Scene();
 const object = new GameObject([200, 300], 100);
 object.name = "Square";
 new BoxCollider(object);
-new BoxRenderer(object).color = "blue";
+new BoxRenderer(object, undefined, true, false).color = "black";
 (new CircleRenderer(object, 10)).color = "black";
 
 main.root.addChild(object);
