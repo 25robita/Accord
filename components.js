@@ -492,7 +492,6 @@ export class CircleRenderer extends Renderer {
     }
 }
 
-
 export class PolygonRenderer extends Renderer {
     /** @type {Vector2[]} */
     points = [];
@@ -627,4 +626,40 @@ export class BoxRenderer extends PolygonRenderer {
         return this.#right;
     }
 
+}
+
+export class LineRenderer extends Renderer {
+    /** @type {Vector2} */
+    startPoint;
+    /** @type {Vector2} */
+    finishPoint;
+
+    /** @type {number} */
+    width;
+
+    /**
+     * 
+     * @param {GameObject} object 
+     * @param {Vec2Arg} startPoint 
+     * @param {Vec2Arg} finishPoint 
+     * @param {number} width 
+     */
+    constructor(object, startPoint, finishPoint, width = 4) {
+        super(object)
+        this.startPoint = new Vector2(startPoint);
+        this.finishPoint = new Vector2(finishPoint);
+        this.width = width;
+    }
+
+    /** 
+     * @param {CanvasRenderingContext2D} surface 
+     */
+    render(surface) {
+        surface.strokeStyle = this.color;
+        surface.lineWidth = this.width;
+        surface.beginPath();
+        surface.moveTo(this.startPoint.x, this.startPoint.y);
+        surface.lineTo(this.finishPoint.x, this.finishPoint.y);
+        surface.stroke();
+    }
 }

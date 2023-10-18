@@ -1,5 +1,5 @@
 import { AccordObject } from "./base.js";
-import { BoxCollider, BoxRenderer, CircleCollider, CircleRenderer, PhysicsComponent } from "./components.js";
+import { BoxCollider, BoxRenderer, CircleCollider, CircleRenderer, LineRenderer, PhysicsComponent } from "./components.js";
 import { GameObject } from "./gameobject.js";
 import { TimeManager } from "./utilities.js";
 
@@ -101,7 +101,7 @@ main.root.addChild(object3);
 const colliderObject = new GameObject([0, 0], 0);
 colliderObject.name = "Floor";
 new BoxCollider(colliderObject, 500, 600, 0, 1000);
-new BoxRenderer(colliderObject).color = "saddlebrown";
+new LineRenderer(colliderObject, [0, 500], [1000, 500]).color = "saddlebrown";
 main.root.addChild(colliderObject);
 
 
