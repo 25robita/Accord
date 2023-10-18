@@ -65,24 +65,13 @@ export class PhysicsComponent extends Component {
     }
 
     start() {
-        // this.acceleration = new Vector2(0, 0);
-        // this.velocity = new Vector2(0, 0);
-        // this.mass = 1;
     }
 
     update() {
-        // console.log(this.velocity);
         this.velocity.add(this.acceleration.product(Time.deltaTime))
         this.#earlyVelocity.copyFrom(this.velocity);
 
         this.gameObject.position.add(this.velocity.product(Time.deltaTime));
-
-        // this.gameObject.position[0] += this.velocity[0] * Time.deltaTime;
-        // this.gameObject.position[1] += this.velocity[1] * Time.deltaTime;
-    }
-
-    lateUpdate() {
-        // this.gameObject.undoMovement();
     }
 }
 
@@ -114,7 +103,7 @@ export class Collider extends Component {
                 if (!(thisPhysics = this.gameObject.getComponent(PhysicsComponent)))
                     return this.gameObject.undoMovement();
 
-                const otherMass = otherPhysics?.mass ?? Infinity; // this causes issues; it makes sense as to why, but still interesting.
+                const otherMass = otherPhysics?.mass ?? Infinity;
                 const otherVelocity = otherPhysics?.earlyVelocity ?? new Vector2();
 
                 const thisMass = thisPhysics.mass;
@@ -131,11 +120,15 @@ export class Collider extends Component {
 
 
                 let thisRadius;
+                let collisionPointBox = this.collisionPoint(other);
+
+
+
 
                 if (this instanceof CircleCollider) {
                     thisRadius = this.radius;
                 } else if (this instanceof BoxCollider) {
-                    thisRadius = this.collisionPoint(other).distanceTo(this.Center);
+                    thisRadius = collisionPointBox.distanceTo(this.Center);
                 }
 
                 /** @type {Vector2} */
@@ -147,11 +140,10 @@ export class Collider extends Component {
                     );
                 } else if (other instanceof BoxCollider) {
                     otherCenter.copyFrom(
-                        thisCenter.sum(this.collisionPoint(other).difference(thisCenter).product(2))
+                        thisCenter.difference(collisionPointBox).normalised().product(-2 * thisRadius).sum(thisCenter)
                     );
                 }
 
-                [thisMass, thisVelocity, thisCenter]
 
                 const centerDifference = thisCenter.difference(otherCenter);
 
@@ -163,7 +155,7 @@ export class Collider extends Component {
 
                 let newVel = thisVelocity.difference(
                     centerDifference.product(
-                        (2 * otherMass / (thisMass + otherMass))
+                        (otherMass == Infinity ? 2 : (2 * otherMass / (thisMass + otherMass)))
                         * thisVelocity.difference(otherVelocity).dot(centerDifference)
                         / (centerDifference.dot(centerDifference))
                     )
@@ -179,9 +171,9 @@ export class Collider extends Component {
 
 export class BoxCollider extends Collider {
     /** @type {Vector2} */
-    topLeft = new Vector2(100, 100);
+    topLeft = new Vector2();
     /** @type {Vector2} */
-    bottomRight = new Vector2(100, 100);
+    bottomRight = new Vector2();
 
     /**
      * @param {GameObject} object Parent object
@@ -303,6 +295,25 @@ export class BoxCollider extends Collider {
     }
 
     /**
+     * Gives a unit vector in the orthogonal direction (or 45° angle) from the box to the given point. 
+     * @param {Vec2Arg} point 
+     * @returns {Vector2}
+     */
+    compareDirection(point) {
+        const onHorizontal = point[1] > this.Top && point[1] < this.Bottom;
+        const onVertical = point[0] > this.Left && point[0] < this.Right;
+
+        if (onHorizontal) {
+            return point[0] > this.CenterX ? new Vector2(1, 0) : new Vector2(-1, 0);
+        } else if (onVertical) {
+            return point[1] > this.CenterY ? new Vector2(0, 1) : new Vector2(0, -1);
+        } else { // 45° angles
+            const invDifference = this.Center.difference(point);
+            return new Vector2(-Math.sign(invDifference.x) * Math.SQRT1_2, -Math.sign(invDifference.y) * Math.SQRT1_2)
+        }
+    }
+
+    /**
      * @param {Collider} other 
      * @returns {Vector2}
      */
@@ -415,7 +426,8 @@ export class CircleCollider extends Collider {
             if (distanceX <= other.Width / 2) return true;
             if (distanceY <= other.Height / 2) return true;
 
-            return this.Position.distanceTo(other.Center) <= this.radius
+            const squaredDistance = (distanceY - other.Height / 2) ** 2 + (distanceX - other.Width / 2) ** 2;
+            return squaredDistance <= this.radius ** 2;
         }
     }
 
@@ -427,18 +439,19 @@ export class CircleCollider extends Collider {
         if (other instanceof CircleCollider) {
             return this.Position.sum(other.Position.difference(this.Position).normalised().product(this.radius))
         } else if (other instanceof BoxCollider) {
-            // TODO: this should probably find a point *between* the two surfaces; 
-            // currently it finds a point on the circle which is leading to collision
-            // issues. problematically, this should probably make the calculations far more difficult.
-            // i might just be able to get an intercept point from the difference line at x = whatever
-            // and then take the average. anyway im tired
+            const onHorizontal = this.Position.y > other.Top && this.Position.y < other.Bottom;
+            const onVertical = this.Position.x > other.Left && this.Position.x < other.Right;
 
-            // on second thought, this code is entirely f***ed (i will censor it as it is a school project)
-            // and i need to rethink it on a fundamental level. that being said, the method above 
-            // oh wait nevermind there is no difference line. I might have to look through the circle x box
-            // collision code to establish the collision point. fun.
+            if (onHorizontal && this.Position.x > other.Right) return new Vector2(other.Right, this.Position.y);
+            if (onHorizontal && this.Position.x < other.Left) return new Vector2(other.Left, this.Position.y);
 
-            return other.Center.difference(this.Position).normalised().product(this.radius).sum(this.Position)
+            if (onVertical && this.Position.y > other.Bottom) return new Vector2(this.Position.x, other.Bottom);
+            if (onVertical && this.Position.y < other.Top) return new Vector2(this.Position.x, other.Top);
+
+            if (this.Position.x > other.Right && this.Position.y < other.Top) return other.TopRight;
+            if (this.Position.x < other.Left && this.Position.y < other.Top) return other.TopLeft;
+            if (this.Position.x > other.Right && this.Position.y > other.Bottom) return other.TopRight;
+            if (this.Position.x < other.Left && this.Position.y > other.Bottom) return other.TopLeft;
         }
     }
 }

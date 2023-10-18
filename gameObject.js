@@ -42,12 +42,6 @@ export class GameObject extends AccordObject {
      * @param {CanvasRenderingContext2D} surface 
      */
     render(surface) {
-        // if (this.radius) {
-        //     surface.fillStyle = "blue";
-        //     surface.ellipse(this.position.x, this.position.y, this.radius, this.radius, 0, 0, 180);
-        //     surface.fill();
-        // }
-
         /** @type {Renderer} */
         let renderer;
         for (renderer of this.getComponents(Renderer)) {

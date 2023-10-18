@@ -28,14 +28,17 @@ class Scene extends AccordObject {
     /** @type {number} */
     #updaterId;
 
+    /** @type {boolean} */
+    paused;
+
     constructor() {
         super();
         this.root = new GameObject([0, 0], 0);
         this.canvasElement = document.querySelector("canvas");
         this.#context = this.canvasElement.getContext("2d")
-        this.#updateInterval = 1; // 10fps
+        this.#updateInterval = 10; // 10fps
 
-        this.#updaterId = setInterval(this.update.bind(this), this.#updateInterval);
+        this.play();
     }
 
     render() {
@@ -54,23 +57,32 @@ class Scene extends AccordObject {
         // + render
         this.render();
     }
+
+    pause() {
+        clearInterval(this.#updaterId);
+        this.paused = true;
+    }
+
+    play() {
+        Time.lap();
+        this.#updaterId = setInterval(this.update.bind(this), this.#updateInterval);
+        this.paused = false;
+    }
 }
 
 export const Time = new TimeManager();
 
-const main = new Scene();
+export const main = new Scene();
 
 const object = new GameObject([200, 300], 100);
-object.name = "Ball";
-const object1Physics = new PhysicsComponent(object, 2);
-object1Physics.velocity.copyFrom([100, 0]);
+object.name = "Square";
 new BoxCollider(object);
 new BoxRenderer(object).color = "blue";
 (new CircleRenderer(object, 10)).color = "black";
 
 main.root.addChild(object);
 
-const object2 = new GameObject([400, 340], 30);
+const object2 = new GameObject([400, 300], 30);
 object2.name = "Ball 2";
 (new PhysicsComponent(object2)).velocity.copyFrom([-100, 0]);
 (new CircleRenderer(object2, 30)).color = "red";
@@ -78,9 +90,17 @@ new CircleCollider(object2);
 
 main.root.addChild(object2);
 
+const object3 = new GameObject([600, 200], 100);
+object3.name = "Ball";
+(new PhysicsComponent(object3, 10)).velocity.copyFrom([-100, 0]);
+(new CircleRenderer(object3, 100)).color = "red";
+new CircleCollider(object3);
+
+main.root.addChild(object3);
+
 const colliderObject = new GameObject([0, 0], 0);
 colliderObject.name = "Floor";
-new BoxCollider(colliderObject, 600, 800, 0, 1000);
+new BoxCollider(colliderObject, 500, 600, 0, 1000);
 new BoxRenderer(colliderObject).color = "saddlebrown";
 main.root.addChild(colliderObject);
 
@@ -99,4 +119,8 @@ function resize() {
 addEventListener("resize", resize);
 
 resize();
-//# sourceMappingURL=main.js.map
+
+
+addEventListener("keypress", ({ key }) => {
+    if (key == " ") main.paused ? main.play() : main.pause();
+})
