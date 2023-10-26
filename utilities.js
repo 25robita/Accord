@@ -34,6 +34,109 @@ export class TimeManager {
     }
 }
 
+export class InputManager {
+    /** @type {Set<string>} */
+    #keys = new Set();
+    /** @type {Set<string>} */
+    #activeKeys = new Set();
+    /** @type {Set<string>} */
+    #keysDown = new Set();
+    /** @type {Set<string>} */
+    #keysUp = new Set();
+
+    /** @type {number[]} */
+    #mouseButtons = [];
+    /** @type {number[]} */
+    #activeMouseButtons = [];
+    /** @type {number[]} */
+    #mouseButtonsUp = [];
+    /** @type {number[]} */
+    #mouseButtonsDown = [];
+
+    constructor() {
+        addEventListener("keydown", this.#handleKeyDown.bind(this));
+        addEventListener("keyup", this.#handleKeyUp.bind(this));
+        addEventListener("mousedown", this.#handleMouseDown.bind(this));
+        addEventListener("mouseup", this.#handleMouseUp.bind(this));
+    }
+
+    /**
+     * @param {KeyboardEvent} event 
+     */
+    #handleKeyDown(event) {
+        this.#keys.add(event.key);
+    }
+
+    /**
+     * @param {KeyboardEvent} event 
+    */
+    #handleKeyUp(event) {
+        this.#keys.delete(event.key);
+    }
+
+    /**
+     * @param {MouseEvent} event 
+     */
+    #handleMouseDown(event) {
+        this.#mouseButtons[event.button] = true;
+    }
+
+    /**
+     * @param {MouseEvent} event 
+     */
+    #handleMouseUp(event) {
+        this.#mouseButtons[event.button] = false;
+    }
+
+    update() {
+        this.#keysDown.clear();
+        for (let k of this.#keys) {
+            if (this.#activeKeys.has(k)) continue;
+            this.#keysDown.add(k);
+        }
+        for (let k of this.#activeKeys) {
+            if (this.#keys.has(k)) continue;
+            this.#keysUp.add(k);
+        }
+        this.#activeKeys = new Set(this.#keys);
+
+        this.#activeMouseButtons = Array.from(this.#mouseButtons);
+    }
+
+    /**
+     * Returns whether or not the specified key was held down at the start of the frame
+     * @param {string} name 
+     * @returns {boolean}
+     */
+    getKey(name) {
+        return this.#activeKeys.has(name);
+    }
+
+    /**
+     * Returns whether or not the specified key was pressed in the last frame
+     * @param {string} name 
+     * @returns {boolean}
+     */
+    getKeyDown(name) {
+        return this.#keysDown.has(name);
+    }
+
+    /**
+     * Returns whether or not the specified key was released in the last frame
+     * @param {string} name 
+     * @returns {boolean}
+     */
+    getKeyDown(name) {
+        return this.#keysUp.has(name);
+    }
+
+    getMouseButton(index) {
+
+    }
+    // getMouseButton
+    // getMouseButtonDown
+    // getMouseButtonUp
+}
 
 export class Vector2 {
     /** @type {number} */
@@ -94,6 +197,40 @@ export class Vector2 {
     }
 
     /**
+     * Checks equality between two Vector2
+     * @param {Vec2Arg} a 
+     * @param {Vec2Arg} b 
+     * @returns {boolean}
+     */
+    static equals(a, b) {
+        return a[0] == b[0] && a[1] == b[1];
+    }
+
+    /**
+     * Checks equality between two Vector2. Alias for Vector2.eq
+     * @param {Vec2Arg} a 
+     * @param {Vec2Arg} b 
+     * @returns {boolean}
+     */
+    static eq = Vector2.equals;
+
+    /**
+     * Checks equality between this and another Vector2
+     * @param {Vec2Arg} other
+     * @returns {boolean}
+     */
+    equals(other) {
+        return Vector2.equals(this, other);
+    }
+
+    /**
+     * Checks equality between this and another Vector2. Alias for Vector2.prototype.equals
+     * @param {Vec2Arg} other
+     * @returns {boolean}
+     */
+    eq = this.equals;
+
+    /**
      * @param {Vec2Arg} a 
      * @param {Vec2Arg} b 
      * @returns {number}
@@ -137,7 +274,37 @@ export class Vector2 {
         return Vector2.normalised(this);
     }
 
+    /**
+     * @param {Vec2Arg} a 
+     * @returns {number}
+     */
+    static magnitude(a) {
+        return Math.sqrt(a[0] ** 2 + a[1] ** 2);
+    }
 
+    /**
+     * @returns {number}
+     */
+    magnitude() {
+        return Vector2.magnitude(this);
+    }
+
+    /**
+     * Gives the normal vector to `a`
+     * @param {Vec2Arg} a 
+     * @returns {Vector2}
+     */
+    static normal(a) {
+        return new Vector2(-a[1], a[0]);
+    }
+
+    /**
+     * Gives the normal vector to this vector
+     * @returns {Vector2}
+     */
+    normal() {
+        return Vector2.normal(this);
+    }
 
     /**
      * Returns the sum of two Vector2 or a Vector2 and a number
@@ -238,6 +405,25 @@ export class Vector2 {
      */
     dot(other) {
         return Vector2.dot(this, other);
+    }
+
+    /**
+     * Calculates the cross product of two vectors
+     * @param {Vec2Arg} a
+     * @param {Vec2Arg} b
+     * @returns {number}
+     */
+    static cross(a, b) {
+        return a[0] * b[1] - a[1] * b[0];
+    }
+
+    /**
+     * Calculates the cross product of this and another vector
+     * @param {Vec2Arg} other 
+     * @returns {number}
+     */
+    cross(other) {
+        return Vector2.cross(this, other);
     }
 
     /**

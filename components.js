@@ -30,7 +30,6 @@ export class Component extends AccordObject {
     start() { }
 }
 
-
 export class PhysicsComponent extends Component {
     /** @type {Vector2} */
     velocity = new Vector2();
@@ -44,7 +43,7 @@ export class PhysicsComponent extends Component {
     }
 
     /** @type {Vector2} */
-    acceleration = new Vector2();
+    acceleration = new Vector2(0, 0);
 
     /** @type {number} */
     mass = 1;
@@ -95,6 +94,7 @@ export class Collider extends Component {
         for (let other of allColliders) {
             if (this.uuid == other.uuid) continue;
             if (this.checkCollision(other)) {
+                // console.log(`${this.gameObject.name} vs ${other.gameObject.name} start`);
                 /** @type {PhysicsComponent | null} */
                 let thisPhysics;
                 /** @type {PhysicsComponent | null} */
@@ -107,28 +107,30 @@ export class Collider extends Component {
                 const otherVelocity = otherPhysics?.earlyVelocity ?? new Vector2();
 
                 const thisMass = thisPhysics.mass;
-                const thisVelocity = thisPhysics.velocity;
+                const thisVelocity = thisPhysics.earlyVelocity;
 
-                /** @type {Vector2} */
                 let thisCenter = new Vector2();
+                let collisionPoint = this.collisionPoint(other);
+                /** @type {number} */
+                let thisRadius;
 
                 if (this instanceof CircleCollider) {
                     thisCenter.copyFrom(this.Position);
-                } else if (this instanceof BoxCollider) {
-                    thisCenter.copyFrom(this.Center);
-                }
-
-
-                let thisRadius;
-                let collisionPointBox = this.collisionPoint(other);
-
-
-
-
-                if (this instanceof CircleCollider) {
                     thisRadius = this.radius;
-                } else if (this instanceof BoxCollider) {
-                    thisRadius = collisionPointBox.distanceTo(this.Center);
+                } else if (this instanceof BoxCollider) { // fix
+                    let direction = new Vector2();
+
+                    const d = collisionPoint.difference(this.Center)
+
+                    if (d.x > Math.abs(d.y)) { direction.copyFrom([-1, 0]); thisRadius = this.Width / 2; }
+                    else if (-d.x > Math.abs(d.y)) { direction.copyFrom([1, 0]); thisRadius = this.Width / 2; }
+                    else if (d.y > Math.abs(d.x)) { direction.copyFrom([0, -1]); thisRadius = this.Height / 2; }
+                    else if (-d.y > Math.abs(d.x)) { direction.copyFrom([0, 1]); thisRadius = this.Height / 2; }
+                    else { thisRadius = this.TopRight.difference(this.Center).magnitude(); direction.copyFrom(d.normalised()); }
+                    thisCenter.copyFrom(collisionPoint.sum(direction.product(thisRadius)));
+                    // console.log(thisCenter, this.TopRight, this.BottomRight, this.TopLeft, this.BottomLeft, direction);
+                } else if (this instanceof LineCollider) { // implement thisRadius and thisCenter
+
                 }
 
                 /** @type {Vector2} */
@@ -138,14 +140,40 @@ export class Collider extends Component {
                     otherCenter.copyFrom(
                         thisCenter.sum(other.Position.difference(thisCenter).normalised().product(2 * thisRadius))
                     );
-                } else if (other instanceof BoxCollider) {
+                } else if (other instanceof BoxCollider || other instanceof LineCollider) {
                     otherCenter.copyFrom(
-                        thisCenter.difference(collisionPointBox).normalised().product(-2 * thisRadius).sum(thisCenter)
+                        thisCenter.difference(collisionPoint).normalised().product(-2 * thisRadius).sum(thisCenter)
                     );
                 }
 
 
+
+                // ensure objects are going towards eachother (relativistically)
+                const dV = thisVelocity.difference(otherVelocity);
+                const dP = otherCenter.difference(thisCenter);
+
+                const dTheta = 180 * Math.acos(dV.dot(dP) / (dV.magnitude() * dP.magnitude())) / Math.PI;
+
+                console.log(dTheta);
+
+                if (dTheta > 90) return;
+
+
+
+
                 const centerDifference = thisCenter.difference(otherCenter);
+
+                // const marker = new GameObject(otherCenter, thisRadius);
+                // (new CircleRenderer(marker, thisRadius)).color = '#0000ff10';
+                // main.root.addChild(marker);
+
+                // const marker2 = new GameObject(thisCenter, thisRadius);
+                // (new CircleRenderer(marker2, thisRadius)).color = '#ff000010';
+                // main.root.addChild(marker2);
+
+                // const marker3 = new GameObject(collisionPoint, 5);
+                // (new CircleRenderer(marker3, 5)).color = '#00ff0030';
+                // main.root.addChild(marker3);
 
                 /**
                  * Based on – maths-wise and whatnot
@@ -157,12 +185,25 @@ export class Collider extends Component {
                     centerDifference.product(
                         (otherMass == Infinity ? 2 : (2 * otherMass / (thisMass + otherMass)))
                         * thisVelocity.difference(otherVelocity).dot(centerDifference)
-                        / (centerDifference.dot(centerDifference))
+                        / (centerDifference.dot(centerDifference)) // same as cD.magnitude() ** 2s
                     )
                 );
 
+                /**
+                 * Current Bugs:
+                 *  [ ] Objects sometimes get stuck inside each other. If the velocity from the
+                 *      collision is not high enough to get the objects to stop colliding on
+                 *      the first frame, they collide again. This collision results in the
+                 *      velocity flipping sign and ends in said stuck objects oscillating each
+                 *      frame.
+                 *  [ ] Sometimes when a CircleCollider collides with the corner of a 
+                 *      BoxCollider, the collision point that is marked goes to the corners of 
+                 *      the BoxCollider.
+                 */
+
                 thisPhysics.velocity = newVel;
 
+                // console.log(`${this.gameObject.name} vs ${other.gameObject.name} end`);
                 break;
             }
         }
@@ -429,6 +470,8 @@ export class CircleCollider extends Collider {
             const squaredDistance = (distanceY - other.Height / 2) ** 2 + (distanceX - other.Width / 2) ** 2;
             return squaredDistance <= this.radius ** 2;
         }
+
+        return other.checkCollision(this);
     }
 
     /** 
@@ -452,6 +495,243 @@ export class CircleCollider extends Collider {
             if (this.Position.x < other.Left && this.Position.y < other.Top) return other.TopLeft;
             if (this.Position.x > other.Right && this.Position.y > other.Bottom) return other.TopRight;
             if (this.Position.x < other.Left && this.Position.y > other.Bottom) return other.TopLeft;
+            return this.Position;
+        }
+        return other.collisionPoint(this);
+    }
+}
+
+export class LineCollider extends Collider {
+    /** @type {Vector2} */
+    #startPoint;
+    /** @type {Vector2} */
+    #endPoint;
+
+
+    /** @type {Vector2} */
+    get startPoint() {
+        return this.#startPoint;
+    }
+
+    set startPoint(value) {
+        this.#startPoint = value;
+        this.#calculateLength();
+    }
+
+    /** @type {Vector2} */
+    get endPoint() {
+        return this.#endPoint;
+    }
+
+    set endPoint(value) {
+        this.#endPoint = value;
+        this.#calculateLength();
+    }
+
+    /** @type {number} */
+    #length;
+
+    get length() {
+        return this.#length;
+    }
+
+    #calculateLength() {
+        this.#length = this.#endPoint.difference(this.#startPoint).magnitude();
+    }
+
+    /**
+     * @param {GameObject} object 
+     * @param {Vec2Arg} startPoint 
+     * @param {Vec2Arg} endPoint 
+     */
+    constructor(object, startPoint, endPoint) {
+        super(object);
+
+        this.#startPoint = new Vector2(startPoint);
+        this.#endPoint = new Vector2(endPoint);
+        this.#calculateLength();
+    }
+
+    /**
+     * @param {Vector2} startA 
+     * @param {Vector2} endA 
+     * @param {Vector2} startB 
+     * @param {Vector2} endB 
+     * @returns {boolean}
+     */
+    static checkLineCollision(startA, endA, startB, endB) {
+        const differenceA = endA.difference(startA);
+        const differenceB = endB.difference(startB);
+
+        const gradientA = differenceA.x == 0 ? Infinity : differenceA.y / differenceA.x;
+        const gradientB = differenceB.x == 0 ? Infinity : differenceB.y / differenceB.x;
+
+        const cA = endA.y - gradientA * endA.x;
+        const cB = endB.y - gradientB * endB.x;
+
+        if (gradientA == Infinity || gradientB == Infinity) {
+            if (gradientA == gradientB) return startA.x == startB.x;
+
+            // one vertical, one not
+
+            const interceptPointX = gradientA == Infinity ? startA.x : startB.x;
+
+            const interceptPointY = gradientA == Infinity ? gradientB * interceptPointX + cB : gradientA * interceptPointX + cA;
+
+            const topVert = gradientA == Infinity ? Math.min(startA.y, endA.y) : Math.min(startB.y, endB.y);
+            const bottomVert = gradientA == Infinity ? Math.max(startA.y, endA.y) : Math.max(startB.y, endB.y);
+
+            const leftNonVert = gradientB == Infinity ? Math.min(startA.x, endA.x) : Math.min(startB.x, endB.x);
+            const rightNonVert = gradientB == Infinity ? Math.max(startA.x, endA.x) : Math.max(startB.x, endB.x);
+
+            if (interceptPointX < leftNonVert || interceptPointX > rightNonVert) return false;
+
+            return interceptPointY > topVert && interceptPointY < bottomVert;
+        }
+
+
+        const interceptPointX = (cB - cA) / (gradientA - gradientB);
+
+        if (interceptPointX < Math.min(startA.x, endA.x) && interceptPointX > Math.max(startA.x, endA.x)
+            && interceptPointX < Math.min(startB.x, endB.x) && interceptPointX > Math.max(startB.x, endB.x)) return true;
+
+
+        if (endA == startB || endA == endB || startA == startB || startA == endB) return true;
+        return false;
+    }
+
+    /**
+     * @param {Vector2} startA 
+     * @param {Vector2} endA 
+     * @param {Vector2} startB 
+     * @param {Vector2} endB 
+     * @returns {Vector2}
+     */
+    static lineCollisionPoint(startA, endA, startB, endB) {
+        if (startA == startB || startA == endB) return new Vector2(startA);
+        if (endA == startB || endA == endB) return new Vector2(endA);
+
+        const differenceA = endA.difference(startA);
+        const differenceB = endB.difference(startB);
+
+        const gradientA = differenceA.x == 0 ? Infinity : differenceA.y / differenceA.x;
+        const gradientB = differenceB.x == 0 ? Infinity : differenceB.y / differenceB.x;
+
+        const cA = endA.y - gradientA * endA.x;
+        const cB = endB.y - gradientB * endB.x;
+
+        if (gradientA == Infinity || gradientB == Infinity) {
+            if (gradientA == gradientB) return startA.sum(endA).quotient(2);
+
+            // one vertical, one not
+
+            const interceptPointX = gradientA == Infinity ? startA.x : startB.x;
+
+            const interceptPointY = gradientA == Infinity ? gradientB * interceptPointX + cB : gradientA * interceptPointX + cA;
+
+            return new Vector2(interceptPointX, interceptPointY);
+        }
+
+        const interceptPointX = (cB - cA) / (gradientA - gradientB);
+
+        return new Vector2(interceptPointX, gradientA * interceptPointX + cA);
+    }
+
+    /**
+     * @param {Collider} other
+     */
+    checkCollision(other) {
+        if (other instanceof CircleCollider) {
+            /** Based on
+             * URL: https://www.baeldung.com/cs/circle-line-segment-collision-detection
+             * Date: 18/10/23
+             */
+
+            // gets area of triangle (otherCenter, startPoint, endPoint) with cross product magic
+            // divides by length to get height of triangle (ignore doubling etc as it cancels out probably)
+            // which just so happens to be the shortest distance from the line
+            // to the center of the circle. Fun! (the rest is obvious)
+
+            if (other.Position.difference(this.#endPoint).dot(this.#startPoint.difference(this.#endPoint)) > 0
+                && other.Position.difference(this.#startPoint).dot(this.#endPoint.difference(this.#startPoint))) {
+                const ab = this.#startPoint.difference(other.Position);
+                const ac = this.#endPoint.difference(other.Position);
+
+                const min_length = Math.abs(ab.cross(ac)) / this.#length; // (the height of the triangle)
+                return min_length <= other.radius;
+            }
+
+            return other.Position.distanceTo(this.#endPoint) <= other.radius || other.Position.distanceTo(this.#startPoint) <= other.radius;
+
+        } else if (other instanceof BoxCollider) {
+            if (this.#endPoint.x >= other.Left && this.#endPoint.x <= other.Right && this.#endPoint.y >= other.Top && this.#endPoint.y <= other.Bottom) return true;
+            if (this.#startPoint.x >= other.Left && this.#startPoint.x <= other.Right && this.#startPoint.y >= other.Top && this.#startPoint.y <= other.Bottom) return true;
+
+            const edges = [
+                [other.TopLeft, other.TopRight],
+                [other.TopRight, other.BottomRight],
+                [other.BottomRight, other.BottomLeft],
+                [other.BottomLeft, other.TopLeft]
+            ];
+
+            for (let [start, end] of edges) {
+                const col = LineCollider.checkLineCollision(this.startPoint, this.endPoint, start, end);
+
+                // console.log(`${this.startPoint} -> ${this.endPoint}\n${start} -> ${end}`);
+
+                if (col) return true;
+            }
+
+            // console.log('hi')
+
+            return false;
+
+        } else if (other instanceof LineCollider) {
+            return LineCollider.checkLineCollision(this.startPoint, this.endPoint, other.startPoint, other.endPoint);
+        }
+    }
+    /**
+     * @param {Collider} other
+     */
+    collisionPoint(other) {
+        if (other instanceof CircleCollider) {
+            if (other.Position.difference(this.#endPoint).dot(this.#startPoint.difference(this.#endPoint)) > 0
+                && other.Position.difference(this.#startPoint).dot(this.#endPoint.difference(this.#startPoint)) > 0) {
+                const ab = this.#startPoint.difference(other.Position);
+                const ac = this.#endPoint.difference(other.Position);
+
+                const min_length = Math.abs(ab.cross(ac)) / this.#length; // (the height of the triangle)
+                return this.#startPoint.difference(this.#endPoint).normal().normalised().product([-min_length, min_length]).sum(other.Position)
+            }
+
+            if (other.Position.distanceTo(this.#endPoint) <= other.radius) return new Vector2(this.#endPoint);
+            return new Vector2(this.#startPoint)
+
+        } else if (other instanceof BoxCollider) {
+            if (this.#endPoint.x >= other.Left && this.#endPoint.x <= other.Right && this.#endPoint.y >= other.Top && this.#endPoint.y <= other.Bottom) return new Vector2(this.#endPoint);
+            if (this.#startPoint.x >= other.Left && this.#startPoint.x <= other.Right && this.#startPoint.y >= other.Top && this.#startPoint.y <= other.Bottom) return new Vector2(this.#startPoint);
+
+            const edges = [
+                [other.TopLeft, other.TopRight], // top
+                [other.TopRight, other.BottomRight], // right
+                [other.BottomRight, other.BottomLeft], // bottom
+                [other.BottomLeft, other.TopLeft] // left
+            ];
+
+            let p = new Vector2();
+            let n = 0;
+            for (let [start, end] of edges) {
+                if (LineCollider.checkLineCollision(this.startPoint, this.endPoint, start, end)) {
+                    p.add(LineCollider.lineCollisionPoint(this.startPoint, this.endPoint, start, end));
+                    n++;
+                }
+            }
+
+            if (n) return p.quotient(n);
+
+            return new Vector2();
+        } else if (other instanceof LineCollider) {
+            return LineCollider.lineCollisionPoint(this.startPoint, this.endPoint, other.startPoint, other.endPoint);
         }
     }
 }
@@ -680,4 +960,19 @@ export class LineRenderer extends Renderer {
         surface.lineTo(this.finishPoint.x, this.finishPoint.y);
         surface.stroke();
     }
+}
+
+export class Script extends Component {
+    /**
+     * @param {GameObject} object 
+     * @param {string} startFunction 
+     * @param {string} updateFunction 
+     */
+    constructor(object, startFunction, updateFunction) {
+        super(object);
+        this.start = new Function(startFunction).bind(this);
+        this.update = new Function(updateFunction).bind(this);
+    }
+
+    vars = new Map();
 }
