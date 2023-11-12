@@ -4,10 +4,85 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Accord</title>
-    <script src="index.js" defer></script>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="ui.css">
+    <script src="index.js" defer></script>
+    <script src="./external/cm6.bundle.min.js"></script>
 </head>
 <body>
-    <canvas></canvas>
+    <div class="ui-grid">
+        <div class="hierarchy panel">
+            <div class="title-bar">
+                <div class="title">Hierarchy</div>
+                <button class="icon" id="add-gameobject">+</button>
+            </div>
+            <ul class="items game-objects" id="hierarchy">
+            </ul>
+        </div>
+        <div class="scene panel"></div>
+        <div class="game panel">
+            <div class="title-bar">
+                <div class="title">Game</div>
+            </div>
+            <div class="game-canvas-container">
+                <div class="game-canvas-parent">
+                    <canvas class="game-canvas" width="1200" height="675"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="inspector panel">
+            <div class="title-bar">
+                <div class="title">Inspector</div>
+            </div>
+            <ul class="components" id ="components">
+            </ul>
+            <div class="center">
+                <button class="inspector-button" id="add-component">Add Component</button>
+            </div>
+        </div>
+        <div class="console panel">
+            <div class="title-bar">
+                <div class="title">Console</div>
+            </div>
+            <ul class="messages" id="log">
+                <!-- <li class="message info">
+                    <div class="bar"></div>
+                    <div class="content">An informative message</div>
+                    <div class="date">21:00:29.535</div>
+                </li>
+                <li class="message info">
+                    <div class="bar"></div>
+                    <div class="content">An long informative message. Lorem ipsum dolor, sit amet consectetur adipisicing elit. Laborum quod distinctio, labore corporis doloremque neque error ducimus vero, voluptates amet magni, cumque adipisci. Non itaque inventore obcaecati maxime! Officia aspernatur harum inventore exercitationem provident dolorum molestiae doloribus consequuntur et facilis. Ullam est impedit rem illo dolores facilis praesentium quaerat, esse animi at vero quibusdam repellat laudantium, sed recusandae quos harum aspernatur repudiandae iure veritatis porro sequi quidem magnam. Odio excepturi, tempore quod mollitia exercitationem repellendus aut quaerat dignissimos asperiores labore nemo omnis modi quisquam ducimus optio odit dolorum dicta et quis, vitae dolores maiores, neque quibusdam! Incidunt ipsam est iusto!</div>
+                    <div class="date">21:00:29.535</div>
+                </li>
+                <li class="message warn">
+                    <div class="bar"></div>
+                    <div class="content">A warning</div>
+                    <div class="date">21:00:29.535</div>
+                </li>
+                <li class="message error">
+                    <div class="bar"></div>
+                    <div class="content">An Error!!</div>
+                    <div class="date">21:00:29.535</div>
+                </li> -->
+            </ul>
+        </div>
+    </div>
+
+    <div class="popup" id="component-select" style="visibility: hidden;">
+        <ul>
+            <li>Script</li>
+            <li>PhysicsComponent</li>
+            <li>LineRenderer</li>
+            <li>PolygonRenderer</li>
+            <li>BoxRenderer</li>
+            <li>CircleRenderer</li>
+            <li>TextRenderer</li>
+            <li>LineCollider</li>
+            <li>BoxCollider</li>
+            <li>CircleCollider</li>
+        </ul>
+    </div>
+    
 </body>
 </html>

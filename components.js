@@ -19,8 +19,6 @@ export class Component extends AccordObject {
         super();
         this.gameObject = gameObject;
         this.gameObject.attachComponent(this);
-
-        this.start();
     }
 
     update() { }
@@ -49,6 +47,21 @@ export class PhysicsComponent extends Component {
     mass = 1;
 
     /**
+     * @returns {object} Object serialization for this object
+     */
+    serialize() {
+        return {
+            type: "PhysicsComponent",
+            uuid: this.uuid,
+            gameObject: this.gameObject.uuid,
+            enabled: this.enabled,
+            velocity: this.velocity.serialize(),
+            acceleration: this.acceleration.serialize(),
+            mass: this.mass
+        }
+    }
+
+    /**
      * 
      * @param {GameObject} object 
      * @param {number} [mass] 
@@ -58,11 +71,6 @@ export class PhysicsComponent extends Component {
         this.mass = mass ?? 1;
     }
 
-    /** @type  */
-    addForce(force) {
-
-    }
-
     start() {
     }
 
@@ -70,11 +78,26 @@ export class PhysicsComponent extends Component {
         this.velocity.add(this.acceleration.product(Time.deltaTime))
         this.#earlyVelocity.copyFrom(this.velocity);
 
-        this.gameObject.position.add(this.velocity.product(Time.deltaTime));
+        this.gameObject.localPosition.add(this.velocity.product(Time.deltaTime));
     }
 }
 
+/** @typedef {(other: Collider, point:Vector2) => void} ColliderCallback */
+
 export class Collider extends Component {
+    /** @type {boolean} */
+    trigger = false;
+    /** @type {ColliderCallback[]} */
+    #collisionListeners = [];
+
+    /**
+     * Registers a callback called whenever this object collides with another
+     * @param {ColliderCallback} callback 
+     */
+    registerCollisionListener(callback) {
+        this.#collisionListeners.push(callback);
+    }
+
     /**
      * @param {Collider} other
      * @returns {boolean}
@@ -94,14 +117,26 @@ export class Collider extends Component {
         for (let other of allColliders) {
             if (this.uuid == other.uuid) continue;
             if (this.checkCollision(other)) {
+                let collisionPoint = this.collisionPoint(other);
+                if (this.trigger || other.trigger) {
+                    this.#collisionListeners.forEach((callback) => {
+                        callback(other, collisionPoint);
+                    });
+                    continue;
+                }
                 // console.log(`${this.gameObject.name} vs ${other.gameObject.name} start`);
                 /** @type {PhysicsComponent | null} */
                 let thisPhysics;
                 /** @type {PhysicsComponent | null} */
                 const otherPhysics = other.gameObject.getComponent(PhysicsComponent);
 
-                if (!(thisPhysics = this.gameObject.getComponent(PhysicsComponent)))
-                    return this.gameObject.undoMovement();
+                if (!(thisPhysics = this.gameObject.getComponent(PhysicsComponent))) {
+                    this.gameObject.undoMovement();
+                    this.#collisionListeners.forEach((callback) => {
+                        callback(other, collisionPoint);
+                    });
+                    continue;
+                }
 
                 const otherMass = otherPhysics?.mass ?? Infinity;
                 const otherVelocity = otherPhysics?.earlyVelocity ?? new Vector2();
@@ -110,7 +145,7 @@ export class Collider extends Component {
                 const thisVelocity = thisPhysics.earlyVelocity;
 
                 let thisCenter = new Vector2();
-                let collisionPoint = this.collisionPoint(other);
+
                 /** @type {number} */
                 let thisRadius;
 
@@ -154,7 +189,7 @@ export class Collider extends Component {
 
                 const dTheta = 180 * Math.acos(dV.dot(dP) / (dV.magnitude() * dP.magnitude())) / Math.PI;
 
-                console.log(dTheta);
+                // console.log(dTheta);
 
                 if (dTheta > 90) return;
 
@@ -189,21 +224,11 @@ export class Collider extends Component {
                     )
                 );
 
-                /**
-                 * Current Bugs:
-                 *  [ ] Objects sometimes get stuck inside each other. If the velocity from the
-                 *      collision is not high enough to get the objects to stop colliding on
-                 *      the first frame, they collide again. This collision results in the
-                 *      velocity flipping sign and ends in said stuck objects oscillating each
-                 *      frame.
-                 *  [ ] Sometimes when a CircleCollider collides with the corner of a 
-                 *      BoxCollider, the collision point that is marked goes to the corners of 
-                 *      the BoxCollider.
-                 */
-
                 thisPhysics.velocity = newVel;
+                this.#collisionListeners.forEach((callback) => {
+                    callback(other, collisionPoint);
+                })
 
-                // console.log(`${this.gameObject.name} vs ${other.gameObject.name} end`);
                 break;
             }
         }
@@ -215,6 +240,21 @@ export class BoxCollider extends Collider {
     topLeft = new Vector2();
     /** @type {Vector2} */
     bottomRight = new Vector2();
+
+    /**
+     * @returns {object} Object serialization for this object
+     */
+    serialize() {
+        return {
+            type: "BoxCollider",
+            uuid: this.uuid,
+            gameObject: this.gameObject.uuid,
+            enabled: this.enabled,
+            trigger: this.trigger,
+            topLeft: this.topLeft.serialize(),
+            bottomRight: this.bottomRight.serialize(),
+        }
+    }
 
     /**
      * @param {GameObject} object Parent object
@@ -430,6 +470,21 @@ export class CircleCollider extends Collider {
     radius;
 
     /**
+     * @returns {object} Object serialization for this object
+     */
+    serialize() {
+        return {
+            type: "CircleCollider",
+            uuid: this.uuid,
+            gameObject: this.gameObject.uuid,
+            enabled: this.enabled,
+            trigger: this.trigger,
+            offset: this.offset.serialize(),
+            radius: this.radius
+        }
+    }
+
+    /**
      * 
      * @param {GameObject} object Parent gameobject
      * @param {number} [radius] The radius of the collider
@@ -507,11 +562,31 @@ export class LineCollider extends Collider {
     /** @type {Vector2} */
     #endPoint;
 
+    /**
+     * @returns {object} Object serialization for this object
+     */
+    serialize() {
+        return {
+            type: "LineCollider",
+            uuid: this.uuid,
+            gameObject: this.gameObject.uuid,
+            enabled: this.enabled,
+            trigger: this.trigger,
+            startPoint: this.#startPoint.serialize(),
+            endPoint: this.#endPoint.serialize()
+        }
+    }
 
     /** @type {Vector2} */
     get startPoint() {
+        return this.#startPoint.sum(this.gameObject.position);
+    }
+
+    /** @type {Vector2} */
+    get localStartPoint() {
         return this.#startPoint;
     }
+
 
     set startPoint(value) {
         this.#startPoint = value;
@@ -520,7 +595,12 @@ export class LineCollider extends Collider {
 
     /** @type {Vector2} */
     get endPoint() {
-        return this.#endPoint;
+        return this.#endPoint.sum(this.gameObject.position);
+    }
+
+    /** @type {Vector2} */
+    get localEndPoint() {
+        return this.#startPoint;
     }
 
     set endPoint(value) {
@@ -652,20 +732,20 @@ export class LineCollider extends Collider {
             // which just so happens to be the shortest distance from the line
             // to the center of the circle. Fun! (the rest is obvious)
 
-            if (other.Position.difference(this.#endPoint).dot(this.#startPoint.difference(this.#endPoint)) > 0
-                && other.Position.difference(this.#startPoint).dot(this.#endPoint.difference(this.#startPoint))) {
-                const ab = this.#startPoint.difference(other.Position);
-                const ac = this.#endPoint.difference(other.Position);
+            if (other.Position.difference(this.endPoint).dot(this.startPoint.difference(this.endPoint)) > 0
+                && other.Position.difference(this.startPoint).dot(this.endPoint.difference(this.startPoint))) {
+                const ab = this.startPoint.difference(other.Position);
+                const ac = this.endPoint.difference(other.Position);
 
                 const min_length = Math.abs(ab.cross(ac)) / this.#length; // (the height of the triangle)
                 return min_length <= other.radius;
             }
 
-            return other.Position.distanceTo(this.#endPoint) <= other.radius || other.Position.distanceTo(this.#startPoint) <= other.radius;
+            return other.Position.distanceTo(this.endPoint) <= other.radius || other.Position.distanceTo(this.startPoint) <= other.radius;
 
         } else if (other instanceof BoxCollider) {
-            if (this.#endPoint.x >= other.Left && this.#endPoint.x <= other.Right && this.#endPoint.y >= other.Top && this.#endPoint.y <= other.Bottom) return true;
-            if (this.#startPoint.x >= other.Left && this.#startPoint.x <= other.Right && this.#startPoint.y >= other.Top && this.#startPoint.y <= other.Bottom) return true;
+            if (this.endPoint.x >= other.Left && this.endPoint.x <= other.Right && this.endPoint.y >= other.Top && this.endPoint.y <= other.Bottom) return true;
+            if (this.startPoint.x >= other.Left && this.startPoint.x <= other.Right && this.startPoint.y >= other.Top && this.startPoint.y <= other.Bottom) return true;
 
             const edges = [
                 [other.TopLeft, other.TopRight],
@@ -695,21 +775,21 @@ export class LineCollider extends Collider {
      */
     collisionPoint(other) {
         if (other instanceof CircleCollider) {
-            if (other.Position.difference(this.#endPoint).dot(this.#startPoint.difference(this.#endPoint)) > 0
-                && other.Position.difference(this.#startPoint).dot(this.#endPoint.difference(this.#startPoint)) > 0) {
-                const ab = this.#startPoint.difference(other.Position);
-                const ac = this.#endPoint.difference(other.Position);
+            if (other.Position.difference(this.#endPoint).dot(this.startPoint.difference(this.endPoint)) > 0
+                && other.Position.difference(this.startPoint).dot(this.endPoint.difference(this.startPoint)) > 0) {
+                const ab = this.startPoint.difference(other.Position);
+                const ac = this.endPoint.difference(other.Position);
 
                 const min_length = Math.abs(ab.cross(ac)) / this.#length; // (the height of the triangle)
-                return this.#startPoint.difference(this.#endPoint).normal().normalised().product([-min_length, min_length]).sum(other.Position)
+                return this.startPoint.difference(this.endPoint).normal().normalised().product([-min_length, min_length]).sum(other.Position)
             }
 
-            if (other.Position.distanceTo(this.#endPoint) <= other.radius) return new Vector2(this.#endPoint);
-            return new Vector2(this.#startPoint)
+            if (other.Position.distanceTo(this.endPoint) <= other.radius) return new Vector2(this.endPoint);
+            return new Vector2(this.startPoint)
 
         } else if (other instanceof BoxCollider) {
-            if (this.#endPoint.x >= other.Left && this.#endPoint.x <= other.Right && this.#endPoint.y >= other.Top && this.#endPoint.y <= other.Bottom) return new Vector2(this.#endPoint);
-            if (this.#startPoint.x >= other.Left && this.#startPoint.x <= other.Right && this.#startPoint.y >= other.Top && this.#startPoint.y <= other.Bottom) return new Vector2(this.#startPoint);
+            if (this.endPoint.x >= other.Left && this.endPoint.x <= other.Right && this.endPoint.y >= other.Top && this.endPoint.y <= other.Bottom) return new Vector2(this.endPoint);
+            if (this.startPoint.x >= other.Left && this.startPoint.x <= other.Right && this.startPoint.y >= other.Top && this.startPoint.y <= other.Bottom) return new Vector2(this.startPoint);
 
             const edges = [
                 [other.TopLeft, other.TopRight], // top
@@ -751,6 +831,21 @@ export class CircleRenderer extends Renderer {
     color = "black";
 
     /**
+     * @returns {object} Object serialization for this object
+     */
+    serialize() {
+        return {
+            type: "CircleRenderer",
+            uuid: this.uuid,
+            gameObject: this.gameObject.uuid,
+            enabled: this.enabled,
+            radius: this.radius,
+            color: this.color
+        }
+    }
+
+
+    /**
      * 
      * @param {GameObject} gameObject parent
      * @param {number} [radius] Radius of the rendered circle
@@ -790,6 +885,25 @@ export class PolygonRenderer extends Renderer {
     /** @type {number} */
     lineWidth = 4;
 
+    /**
+     * @returns {object} Object serialization for this object
+     */
+    serialize() {
+        return {
+            type: "PolygonRenderer",
+            uuid: this.uuid,
+            gameObject: this.gameObject.uuid,
+            enabled: this.enabled,
+            points: this.points.map(i => i.serialize()),
+            color: this.color,
+            edgeColor: this.edgeColor,
+            edge: this.edge,
+            fill: this.fill,
+            lineWidth: this.lineWidth
+        }
+    }
+
+
     /** 
      * @param {CanvasRenderingContext2D} surface 
      */
@@ -817,6 +931,27 @@ export class BoxRenderer extends PolygonRenderer {
     #left = 0;
     /** @type {number} */
     #right = 0;
+
+    /**
+     * @returns {object} Object serialization for this object
+     */
+    serialize() {
+        return {
+            type: "BoxRenderer",
+            uuid: this.uuid,
+            gameObject: this.gameObject.uuid,
+            enabled: this.enabled,
+            top: this.#top,
+            bottom: this.#bottom,
+            left: this.#left,
+            right: this.#right,
+            color: this.color,
+            edgeColor: this.edgeColor,
+            edge: this.edge,
+            fill: this.fill,
+            lineWidth: this.lineWidth
+        }
+    }
 
 
     /**
@@ -936,6 +1071,22 @@ export class LineRenderer extends Renderer {
     width;
 
     /**
+     * @returns {object} Object serialization for this object
+     */
+    serialize() {
+        return {
+            type: "LineRenderer",
+            uuid: this.uuid,
+            gameObject: this.gameObject.uuid,
+            enabled: this.enabled,
+            startPoint: this.startPoint.serialize(),
+            finishPoint: this.finishPoint.serialize(),
+            width: this.width
+        }
+    }
+
+
+    /**
      * 
      * @param {GameObject} object 
      * @param {Vec2Arg} startPoint 
@@ -956,22 +1107,235 @@ export class LineRenderer extends Renderer {
         surface.strokeStyle = this.color;
         surface.lineWidth = this.width;
         surface.beginPath();
-        surface.moveTo(this.startPoint.x, this.startPoint.y);
-        surface.lineTo(this.finishPoint.x, this.finishPoint.y);
+        surface.moveTo(this.startPoint.x + this.gameObject.position.x, this.startPoint.y + this.gameObject.position.y);
+        surface.lineTo(this.finishPoint.x + this.gameObject.position.x, this.finishPoint.y + this.gameObject.position.y);
         surface.stroke();
     }
 }
 
-export class Script extends Component {
+export class TextRenderer extends Renderer {
+    /** @type {string} */
+    text;
+    /** @type {number} Text Size, in px */
+    size;
+    /** @type {string} */
+    fontFamily;
+    /** @type {Vector2} */
+    offset;
+    /** @type {string} */
+    color = "black";
+    /** @type {CanvasTextAlign} */
+    align = "center";
+    /** @type {CanvasTextBaseline} */
+    baseline = "middle";
+
+    /**
+     * @returns {object} Object serialization for this object
+     */
+    serialize() {
+        return {
+            type: "TextRenderer",
+            uuid: this.uuid,
+            gameObject: this.gameObject.uuid,
+            enabled: this.enabled,
+            text: this.text,
+            size: this.size,
+            fontFamily: this.fontFamily,
+            offset: this.offset.serialize(),
+            color: this.color,
+            align: this.align,
+            baseline: this.baseline
+        }
+    }
+
+
     /**
      * @param {GameObject} object 
-     * @param {string} startFunction 
-     * @param {string} updateFunction 
+     * @param {string} [text] Initial text
+     * @param {number} [size] Text size, in px
+     * @param {number} [fontFamily] Font family of text
+     * @param {Vec2Arg} [offset] Offset of renderer
+     */
+    constructor(object, text, size, fontFamily, offset) {
+        super(object);
+
+        this.text = text ?? "";
+        this.size = size ?? 30;
+        this.fontFamily = fontFamily ?? "sans-serif";
+        this.offset = offset == undefined ? new Vector2() : new Vector2(offset);
+    }
+
+    /**
+     * 
+     * @param {CanvasRenderingContext2D} surface 
+     */
+    render(surface) {
+        surface.fillStyle = this.color;
+        surface.textAlign = this.align;
+        surface.textBaseline = this.baseline;
+        surface.font = `${this.size}px ${this.fontFamily}`
+        const position = this.gameObject.position.sum(this.offset)
+        surface.fillText(this.text, position.x, position.y);
+    }
+}
+
+class ScriptFunction extends AccordObject {
+    /** @type {Function} */
+    #f;
+    /** @type {string} */
+    #t;
+    /** @type {string[]} */
+    #argNames;
+    /** @type {Script} */
+    #thisArg;
+
+    /**
+     * @returns {object} Object serialization for this object
+     */
+    serialize() {
+        return {
+            type: "ScriptFunction",
+            uuid: this.uuid,
+            text: this.#t,
+            argNames: this.#argNames,
+            thisArgUUID: this.#thisArg.uuid
+        }
+    }
+
+    /**
+     * @param {Script} thisArg 
+     * @param {string} text 
+     * @param {...string} argNames 
+     */
+    constructor(thisArg, text, ...argNames) {
+        super();
+        this.#thisArg = thisArg;
+        this.setText(text, ...argNames);
+    }
+
+
+
+    /**
+     * @param  {...any} args 
+     * @returns {any}
+     */
+    call(...args) {
+        return this.#f.call(this.#thisArg, ...args);
+    }
+
+    get text() {
+        return this.#t;
+    }
+
+    get argNames() {
+        return this.#argNames;
+    }
+
+    /**
+     * 
+     * @param {string} text 
+     * @param  {...string} argNames 
+     */
+    setText(text, ...argNames) {
+        // console.log(argNames, text);
+        this.#f = new Function(...argNames, text ?? "");
+        // console.log("here");
+        this.#t = text ?? "";
+
+        this.#argNames = argNames ?? [];
+    }
+
+}
+
+export class Script extends Component {
+    /** @type {Map<string, ScriptFunction>} */
+    functions = new Map()
+
+    /**
+     * @returns {object} Object serialization for this object
+     */
+    serialize() {
+        return {
+            type: "Script",
+            uuid: this.uuid,
+            functions: [...this.functions.entries()].map(([n, f]) => [n, f.serialize()])
+        }
+    }
+
+
+    /**
+     * @param {GameObject} object 
+     * @param {string} [startFunction] 
+     * @param {string} [updateFunction] 
      */
     constructor(object, startFunction, updateFunction) {
         super(object);
-        this.start = new Function(startFunction).bind(this);
-        this.update = new Function(updateFunction).bind(this);
+        this.functions.set("start", new ScriptFunction(this, startFunction));
+        this.functions.set("update", new ScriptFunction(this, updateFunction));
+    }
+
+    /**
+     * 
+     * @param {string} functionName 
+     * @param  {...any} args 
+     * @returns
+     */
+    invoke(functionName, ...args) {
+        return this.functions.get(functionName).call(...args);
+    }
+
+    /**
+     * 
+     * @param {string} functionName 
+     * @param {number} delay The delay in ms 
+     * @param  {...any} args 
+     * @returns
+     */
+    invokeAfter(functionName, delay, ...args) {
+        return new Promise(resolve => {
+            setTimeout(() => {
+                this.functions.get(functionName).call(...args);
+                resolve();
+            }, delay);
+        });
+    }
+
+    start() {
+        return this.functions.get("start").call();
+    }
+
+    update() {
+        return this.functions.get("update").call();
+    }
+
+    /**
+     * @template {"collider"} ListenerType
+     * @param {ListenerType} type 
+     * @param {string} callback 
+     */
+    registerListener(type, callback) {
+        switch (type) {
+            case "collider":
+                /** @type {Collider} */
+                let collider;
+                this.register("onCollision", callback, "other", "point");
+                for (collider of this.gameObject.getComponents(Collider)) {
+                    collider.registerCollisionListener((other, point) =>
+                        this.invoke("onCollision", other, point)
+                    );
+                }
+                break;
+        }
+    }
+
+    /**
+     * Adds a named function to this script
+     * @param {string} functionName Name of the function
+     * @param {string} callback Javascript text of the function
+     * @param  {...string} argNames Names of the arguments to the function
+     */
+    register(functionName, callback, ...argNames) {
+        this.functions.set(functionName, new ScriptFunction(this, callback, ...argNames));
     }
 
     vars = new Map();

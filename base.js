@@ -8,4 +8,13 @@ export class AccordObject {  // going to be serializable
         this.uuid = generateUUID();
         ObjectReference.set(this.uuid, this);
     }
+
+    /**
+     * @returns {object} Object serialization for this object
+     */
+    serialize() {
+        return {
+            uuid: this.uuid
+        }
+    }
 }

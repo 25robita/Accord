@@ -166,6 +166,16 @@ export class Vector2 {
         throw TypeError("Invalid format for Vector2 initialisation")
     }
 
+    /**
+     * @returns {object} Object serialization for this object
+     */
+    serialize() {
+        return {
+            type: "Vector2",
+            value: [this.x, this.y]
+        };
+    }
+
     static Zero = new Vector2();
     static One = new Vector2(1, 1);
 
@@ -263,7 +273,7 @@ export class Vector2 {
      * Normalises this vector in place
      */
     normalise() {
-        this.divide(Math.sqrt(this.x ** 2 + this.y ** 2));
+        this.divide(this.magnitude());
     }
 
     /**
@@ -494,6 +504,7 @@ export class Vector2 {
         if (typeof other == "number") {
             this.x /= other;
             this.y /= other;
+            return;
         }
 
         this.x /= other[0];
@@ -515,5 +526,100 @@ export class Vector2 {
     copyFrom(other) {
         this.x = other[0];
         this.y = other[1];
+    }
+}
+
+/** @readonly */
+/** @enum {number} */
+export const LogLevel = {
+    INFO: 1,
+    WARN: 2,
+    ERROR: 3,
+}
+
+// export class LogMessage {
+//     /** @type {LogLevel} */
+//     level = 1;
+//     /** @type {string} */
+//     message;
+//     /** @type {Date} */
+//     datetime;
+
+//     /**
+//      * 
+//      * @param {string} message 
+//      * @param {LogLevel} level 
+//      * @param {Date} datetime 
+//      */
+//     constructor(message, level, datetime) {
+//         this.message = message;
+//         this.level = level;
+//         this.datetime = datetime ?? new Date();
+//     }
+// }
+
+export class DebugManager {
+    #elem;
+    constructor() {
+        this.#elem = document.getElementById("log");
+    }
+
+    /**
+     * 
+     * @param {LogLevel} level 
+     * @param  {...any} data 
+     */
+    message(level, ...data) {
+        const text = data.reduce((ac, cur) => `${ac.toString()}\t${cur.toString}`);
+        const li = document.createElement("li");
+        li.classList.add("message");
+        switch (level) {
+            case LogLevel.INFO:
+                li.classList.add("info");
+                break;
+            case LogLevel.WARN:
+                li.classList.add("warn");
+                break;
+            case LogLevel.ERROR:
+                li.classList.add("error");
+                break;
+        }
+
+        const bar = document.createElement("div");
+        li.appendChild(bar);
+        bar.classList.add("bar");
+        const content = document.createElement("div");
+        content.textContent = text;
+        content.classList.add("content");
+        li.appendChild(content);
+        const date = document.createElement("div");
+        date.textContent = (new Date()).toLocaleString('en-AU', { hour: "2-digit", minute: "2-digit", second: "2-digit", fractionalSecondDigits: 3, hourCycle: "h24" });
+        date.classList.add("date");
+        li.appendChild(date);
+
+        this.#elem.prepend(li);
+    }
+
+    /**
+     * @param {...any} data The text to log
+     */
+    log(...data) {
+        this.message(LogLevel.INFO, ...data);
+    }
+
+    /**
+     * @param {...any} data The text to warn
+    */
+    warn(...data) {
+        this.message(LogLevel.WARN, ...data);
+
+    }
+
+    /**
+     * @param {...any} data The text to error
+    */
+    error(...data) {
+        this.message(LogLevel.ERROR, ...data);
+
     }
 }
